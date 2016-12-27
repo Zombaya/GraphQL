@@ -9,12 +9,13 @@
 namespace Youshido\GraphQL\Config;
 
 
+use Youshido\GraphQL\Exception\ConfigurationException;
+use Youshido\GraphQL\Exception\ValidationException;
 use Youshido\GraphQL\Validator\ConfigValidator\ConfigValidator;
-use Youshido\GraphQL\Validator\Exception\ConfigurationException;
-use Youshido\GraphQL\Validator\Exception\ValidationException;
 
 /**
  * Class Config
+ *
  * @package Youshido\GraphQL\Config
  */
 abstract class AbstractConfig
@@ -33,6 +34,7 @@ abstract class AbstractConfig
 
     /**
      * TypeConfig constructor.
+     *
      * @param array $configData
      * @param mixed $contextObject
      * @param bool  $finalClass
@@ -50,13 +52,16 @@ abstract class AbstractConfig
         $this->data          = $configData;
         $this->finalClass    = $finalClass;
 
+        $this->build();
+    }
+
+    public function validate()
+    {
         $validator = ConfigValidator::getInstance();
 
         if (!$validator->validate($this->data, $this->getContextRules(), $this->extraFieldsAllowed)) {
-            throw new ConfigurationException('Config is not valid for ' . ($contextObject ? get_class($contextObject) : null) . "\n" . implode("\n", $validator->getErrorsArray(false)));
+            throw new ConfigurationException('Config is not valid for ' . ($this->contextObject ? get_class($this->contextObject) : null) . "\n" . implode("\n", $validator->getErrorsArray(false)));
         }
-
-        $this->build();
     }
 
     public function getContextRules()
@@ -85,6 +90,27 @@ abstract class AbstractConfig
         return $this->get('type');
     }
 
+    public function getData()
+    {
+        return $this->data;
+    }
+
+    public function getContextObject()
+    {
+        return $this->contextObject;
+    }
+
+    public function isFinalClass()
+    {
+        return $this->finalClass;
+    }
+
+    public function isExtraFieldsAllowed()
+    {
+        return $this->extraFieldsAllowed;
+    }
+
+
     /**
      * @return null|callable
      */
@@ -100,11 +126,12 @@ abstract class AbstractConfig
     /**
      * @param      $key
      * @param null $defaultValue
+     *
      * @return mixed|null|callable
      */
     public function get($key, $defaultValue = null)
     {
-        return array_key_exists($key, $this->data) ? $this->data[$key] : $defaultValue;
+        return $this->has($key) ? $this->data[$key] : $defaultValue;
     }
 
     public function set($key, $value)
@@ -112,6 +139,11 @@ abstract class AbstractConfig
         $this->data[$key] = $value;
 
         return $this;
+    }
+
+    public function has($key)
+    {
+        return array_key_exists($key, $this->data);
     }
 
     public function __call($method, $arguments)

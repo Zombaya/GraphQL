@@ -8,7 +8,12 @@
 
 namespace Youshido\GraphQL\Type\Scalar;
 
-
+/**
+ * @deprecated USE DateTime type instead. To be removed in 1.4.
+ *
+ * Class DateType
+ * @package Youshido\GraphQL\Type\Scalar
+ */
 class DateType extends AbstractScalarType
 {
 
@@ -32,7 +37,7 @@ class DateType extends AbstractScalarType
 
     public function isValidValue($value)
     {
-        if (is_object($value)) {
+        if (is_null($value) || is_object($value)) {
             return true;
         }
 
@@ -43,7 +48,7 @@ class DateType extends AbstractScalarType
 
     public function getDescription()
     {
-        return 'Representation of date in "Y-m-d" format';
+        return 'DEPRECATED. Use DateTime instead';
     }
 
 }

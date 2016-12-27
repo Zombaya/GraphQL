@@ -32,15 +32,16 @@ class TestScalarDataProvider
             [-1, -1, true],
             [0.1, 0, false],
             [1.1, 1, false],
+            [[1], 1, false],
             [1e5, 100000, false],
             ["1", 1, false],
-            [9876504321, 9876504321, true],
-            [-9876504321, -9876504321, true],
+            [PHP_INT_MAX - 1, PHP_INT_MAX - 1, true],
+            [~PHP_INT_MAX + 1, ~PHP_INT_MAX + 1, true],
             [1e100, null, false],
             [-1e100, null, false],
             ['-1.1', -1, false],
             ['one', null, false],
-            [null, null, false],
+            [null, null, true],
             [false, 0, false],
             [true, 1, false],
         ];
@@ -57,6 +58,7 @@ class TestScalarDataProvider
             ['-1.1', -1.1, false],
             ['one', null, false],
             [false, 0.0, false],
+            [null, null, true],
             [true, 1.0, false],
         ];
     }
@@ -67,7 +69,7 @@ class TestScalarDataProvider
             ["string", "string", true],
             [1, "1", true],
             [1.1, "1.1", true],
-            [null, null, false],
+            [null, null, true],
             [true, "true", true],
             [false, "false", true],
             [[], null, false],
@@ -81,9 +83,10 @@ class TestScalarDataProvider
             ["", false, false],
             [1, true, false],
             [0, false, false],
-            [null, false, false],
+            [null, false, true],
             [true, true, true],
             [false, false, true],
+            [null, null, true],
             ["true", true, false],
             ["false", false, false],
         ];
@@ -93,7 +96,7 @@ class TestScalarDataProvider
     {
         return [
             ["string-id", "string-id", true],
-            ["", null, false],
+            ["", null, true],
             [1, "1", true],
         ];
     }
@@ -101,7 +104,7 @@ class TestScalarDataProvider
     public static function getDatetimeTestData()
     {
         return [
-            [null, null, false],
+            [null, null, true],
             [new \DateTime('now'), date('Y-m-d H:i:s'), true],
         ];
     }
@@ -109,7 +112,7 @@ class TestScalarDataProvider
     public static function getDatetimetzTestData()
     {
         return [
-            [null, null, false],
+            [null, null, true],
             [new \DateTime('now'), date('r'), true],
         ];
     }
@@ -117,7 +120,7 @@ class TestScalarDataProvider
     public static function getDateTestData()
     {
         return [
-            [null, null, false],
+            [null, null, true],
             [new \DateTime('now'), date('Y-m-d'), true],
         ];
     }
@@ -127,7 +130,7 @@ class TestScalarDataProvider
     {
         return [
             [new \DateTime('now'), time(), true],
-            [null, null, false],
+            [null, null, true],
         ];
     }
 

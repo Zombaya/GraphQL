@@ -10,7 +10,7 @@ namespace Youshido\GraphQL\Type;
 
 
 use Youshido\GraphQL\Config\Traits\ConfigAwareTrait;
-use Youshido\GraphQL\Validator\Exception\ConfigurationException;
+use Youshido\GraphQL\Exception\ConfigurationException;
 
 final class NonNullType extends AbstractType implements CompositeTypeInterface
 {
@@ -20,7 +20,9 @@ final class NonNullType extends AbstractType implements CompositeTypeInterface
 
     /**
      * NonNullType constructor.
+     *
      * @param AbstractType|string $fieldType
+     *
      * @throws ConfigurationException
      */
     public function __construct($fieldType)
@@ -52,10 +54,19 @@ final class NonNullType extends AbstractType implements CompositeTypeInterface
 
     public function isValidValue($value)
     {
-        return $value !== null;
+        if ($value === null) {
+            return false;
+        }
+
+        return $this->getNullableType()->isValidValue($value);
     }
 
     public function isCompositeType()
+    {
+        return true;
+    }
+
+    public function isInputType()
     {
         return true;
     }
@@ -73,6 +84,11 @@ final class NonNullType extends AbstractType implements CompositeTypeInterface
     public function getTypeOf()
     {
         return $this->_typeOf;
+    }
+
+    public function parseValue($value)
+    {
+        return $this->getNullableType()->parseValue($value);
     }
 
 

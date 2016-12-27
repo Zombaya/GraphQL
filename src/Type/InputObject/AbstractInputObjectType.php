@@ -11,6 +11,8 @@ namespace Youshido\GraphQL\Type\InputObject;
 
 use Youshido\GraphQL\Config\Object\InputObjectTypeConfig;
 use Youshido\GraphQL\Field\FieldInterface;
+use Youshido\GraphQL\Parser\Ast\ArgumentValue\InputObject;
+use Youshido\GraphQL\Parser\Ast\ArgumentValue\Variable;
 use Youshido\GraphQL\Type\AbstractType;
 use Youshido\GraphQL\Type\Traits\AutoNameTrait;
 use Youshido\GraphQL\Type\Traits\FieldsAwareObjectTrait;
@@ -34,12 +36,15 @@ abstract class AbstractInputObjectType extends AbstractType
 
     /**
      * @param InputObjectTypeConfig $config
-     * @return mixed
      */
     abstract public function build($config);
 
     public function isValidValue($value)
     {
+        if ($value instanceof InputObject) {
+            $value = $value->getValue();
+        }
+
         if (!is_array($value)) {
             return false;
         }
@@ -65,6 +70,32 @@ abstract class AbstractInputObjectType extends AbstractType
     public function getKind()
     {
         return TypeMap::KIND_INPUT_OBJECT;
+    }
+
+    public function isInputType()
+    {
+        return true;
+    }
+
+    public function parseValue($value)
+    {
+        if($value instanceof InputObject) {
+            $value = $value->getValue();
+        }
+
+        $typeConfig = $this->getConfig();
+        foreach ($value as $valueKey => $item) {
+            if ($item instanceof Variable) {
+                $item = $item->getValue();
+            }
+
+            if (!($inputField = $typeConfig->getField($valueKey))) {
+                throw new \Exception(sprintf('Invalid field "%s" on %s', $valueKey, $typeConfig->getName()));
+            }
+            $value[$valueKey] = $inputField->getType()->parseValue($item);
+        }
+
+        return $value;
     }
 
 }

@@ -12,12 +12,14 @@ use Youshido\GraphQL\Parser\Ast\ArgumentValue\InputList;
 use Youshido\GraphQL\Parser\Ast\ArgumentValue\InputObject;
 use Youshido\GraphQL\Parser\Ast\ArgumentValue\Literal;
 use Youshido\GraphQL\Parser\Ast\ArgumentValue\Variable;
+use Youshido\GraphQL\Parser\Ast\ArgumentValue\VariableReference;
 use Youshido\GraphQL\Parser\Ast\Field;
 use Youshido\GraphQL\Parser\Ast\Fragment;
 use Youshido\GraphQL\Parser\Ast\FragmentReference;
 use Youshido\GraphQL\Parser\Ast\Mutation;
 use Youshido\GraphQL\Parser\Ast\Query;
 use Youshido\GraphQL\Parser\Ast\TypedFragmentReference;
+use Youshido\GraphQL\Parser\Location;
 use Youshido\GraphQL\Parser\Parser;
 
 class ParserTest extends \PHPUnit_Framework_TestCase
@@ -27,83 +29,65 @@ class ParserTest extends \PHPUnit_Framework_TestCase
     {
         $parser = new Parser();
 
-        $this->assertEquals(['queries' => [], 'mutations' => [], 'fragments' => []], $parser->parse());
+        $this->assertEquals([
+            'queries'            => [],
+            'mutations'          => [],
+            'fragments'          => [],
+            'fragmentReferences' => [],
+            'variables'          => [],
+            'variableReferences' => [],
+        ], $parser->parse());
     }
 
     /**
-     * @expectedException Youshido\GraphQL\Parser\Exception\VariableTypeNotDefined
+     * @expectedException Youshido\GraphQL\Exception\Parser\SyntaxErrorException
      */
-    public function testTypeNotDefinedException()
+    public function testInvalidSelection()
     {
         $parser = new Parser();
-        $parser->parse('query getZuckProfile($devicePicSize: Int, $second: Int) {
-                  user(id: 4) {
-                    profilePic(size: $devicePicSize, test: $second, a: $c) {
-                        url
-                    }
-                  }
-                }');
-
-    }
-
-    /**
-     * @expectedException Youshido\GraphQL\Parser\Exception\UnusedVariableException
-     */
-    public function testTypeUnusedVariableException()
-    {
-        $parser = new Parser();
-        $parser->parse('query getZuckProfile($devicePicSize: Int, $second: Int) {
-                  user(id: 4) {
-                    profilePic(size: $devicePicSize) {
-                        url
-                    }
-                  }
-                }');
-    }
-
-    /**
-     * @expectedException Youshido\GraphQL\Parser\Exception\DuplicationVariableException
-     */
-    public function testDuplicationVariableException()
-    {
-        $parser = new Parser();
-        $parser->parse('query getZuckProfile($devicePicSize: Int, $second: Int, $second: Int) {
-                  user(id: 4) {
-                    profilePic(size: $devicePicSize, test: $second) {
-                        url
-                    }
-                  }
-                }');
+        $data   = $parser->parse('
+        {
+            test {
+                id
+                image {
+                    
+                }
+            }
+        }
+        ');
     }
 
     public function testComments()
     {
-        $query = '
-            # asdasd "asdasdasd"
-            # comment line 2
+        $query = <<<GRAPHQL
+# asdasd "asdasdasd"
+# comment line 2
 
-            query {
-              authors (category: "#2") { #asda asd
-                _id
-              }
-            }
-        ';
+query {
+    authors (category: "#2") { #asda asd
+        _id
+    }
+}
+GRAPHQL;
 
+        $parser     = new Parser();
+        $parsedData = $parser->parse($query);
 
-        $parser = new Parser();
-
-        $this->assertEquals($parser->parse($query), [
-            'queries'   => [
+        $this->assertEquals($parsedData, [
+            'queries'            => [
                 new Query('authors', null,
                     [
-                        new Argument('category', new Literal('#2'))
+                        new Argument('category', new Literal('#2', new Location(5, 25)), new Location(5, 14))
                     ],
                     [
-                        new Field('_id', null),
-                    ])
+                        new Field('_id', null, [], new Location(6, 9)),
+                    ], new Location(5, 5))
             ],
-            'mutations' => [],
-            'fragments' => []
+            'mutations'          => [],
+            'fragments'          => [],
+            'fragmentReferences' => [],
+            'variables'          => [],
+            'variableReferences' => []
         ]);
     }
 
@@ -112,7 +96,7 @@ class ParserTest extends \PHPUnit_Framework_TestCase
      * @param $query string
      *
      * @dataProvider wrongQueriesProvider
-     * @expectedException Youshido\GraphQL\Parser\Exception\SyntaxErrorException
+     * @expectedException Youshido\GraphQL\Exception\Parser\SyntaxErrorException
      */
     public function testWrongQueries($query)
     {
@@ -126,11 +110,14 @@ class ParserTest extends \PHPUnit_Framework_TestCase
         $parser = new Parser();
         $data   = $parser->parse('{ name }');
         $this->assertEquals([
-            'queries'   => [
-                new Query('name')
+            'queries'            => [
+                new Query('name', '', [], [], new Location(1, 3))
             ],
-            'mutations' => [],
-            'fragments' => [],
+            'mutations'          => [],
+            'fragments'          => [],
+            'fragmentReferences' => [],
+            'variables'          => [],
+            'variableReferences' => [],
         ], $data);
     }
 
@@ -139,14 +126,17 @@ class ParserTest extends \PHPUnit_Framework_TestCase
         $parser = new Parser();
         $data   = $parser->parse('{ post, user { name } }');
         $this->assertEquals([
-            'queries'   => [
-                new Query('post'),
+            'queries'            => [
+                new Query('post', null, [], [], new Location(1, 3)),
                 new Query('user', null, [], [
-                    new Field('name')
-                ])
+                    new Field('name', null, [], new Location(1, 16))
+                ], new Location(1, 9))
             ],
-            'mutations' => [],
-            'fragments' => [],
+            'mutations'          => [],
+            'fragments'          => [],
+            'fragmentReferences' => [],
+            'variables'          => [],
+            'variableReferences' => [],
         ], $data);
     }
 
@@ -161,16 +151,19 @@ class ParserTest extends \PHPUnit_Framework_TestCase
                 }
             }');
         $this->assertEquals([
-            'queries'   => [],
-            'mutations' => [],
-            'fragments' => [
+            'queries'            => [],
+            'mutations'          => [],
+            'fragments'          => [
                 new Fragment('FullType', '__Type', [
-                    new Field('kind'),
+                    new Field('kind', null, [], new Location(3, 17)),
                     new Query('fields', null, [], [
-                        new Field('name')
-                    ])
-                ])
+                        new Field('name', null, [], new Location(5, 21))
+                    ], new Location(4, 17))
+                ], new Location(2, 22))
             ],
+            'fragmentReferences' => [],
+            'variables'          => [],
+            'variableReferences' => [],
         ], $data);
     }
 
@@ -258,89 +251,101 @@ class ParserTest extends \PHPUnit_Framework_TestCase
         ');
 
         $this->assertEquals([
-            'queries'   => [
+            'queries'            => [
                 new Query('__schema', null, [], [
                     new Query('queryType', null, [], [
-                        new Field('name')
-                    ]),
+                        new Field('name', null, [], new Location(4, 33))
+                    ], new Location(4, 21)),
                     new Query('mutationType', null, [], [
-                        new Field('name')
-                    ]),
+                        new Field('name', null, [], new Location(5, 36))
+                    ], new Location(5, 21)),
                     new Query('types', null, [], [
-                        new FragmentReference('FullType')
-                    ]),
+                        new FragmentReference('FullType', new Location(7, 28))
+                    ], new Location(6, 21)),
                     new Query('directives', null, [], [
-                        new Field('name'),
-                        new Field('description'),
+                        new Field('name', null, [], new Location(10, 25)),
+                        new Field('description', null, [], new Location(11, 25)),
                         new Query('args', null, [], [
-                            new FragmentReference('InputValue'),
-                        ]),
-                        new Field('onOperation'),
-                        new Field('onFragment'),
-                        new Field('onField'),
-                    ]),
-                ])
+                            new FragmentReference('InputValue', new Location(13, 32)),
+                        ], new Location(12, 25)),
+                        new Field('onOperation', null, [], new Location(15, 25)),
+                        new Field('onFragment', null, [], new Location(16, 25)),
+                        new Field('onField', null, [], new Location(17, 25)),
+                    ], new Location(9, 21)),
+                ], new Location(3, 17))
             ],
-            'mutations' => [],
-            'fragments' => [
+            'mutations'          => [],
+            'fragments'          => [
                 new Fragment('FullType', '__Type', [
-                    new Field('kind'),
-                    new Field('name'),
-                    new Field('description'),
+                    new Field('kind', null, [], new Location(23, 17)),
+                    new Field('name', null, [], new Location(24, 17)),
+                    new Field('description', null, [], new Location(25, 17)),
                     new Query('fields', null, [], [
-                        new Field('name'),
-                        new Field('description'),
+                        new Field('name', null, [], new Location(27, 21)),
+                        new Field('description', null, [], new Location(28, 21)),
                         new Query('args', null, [], [
-                            new FragmentReference('InputValue'),
-                        ]),
+                            new FragmentReference('InputValue', new Location(30, 28)),
+                        ], new Location(29, 21)),
                         new Query('type', null, [], [
-                            new FragmentReference('TypeRef'),
-                        ]),
-                        new Field('isDeprecated'),
-                        new Field('deprecationReason'),
-                    ]),
+                            new FragmentReference('TypeRef', new Location(33, 28)),
+                        ], new Location(32, 21)),
+                        new Field('isDeprecated', null, [], new Location(35, 21)),
+                        new Field('deprecationReason', null, [], new Location(36, 21)),
+                    ], new Location(26, 17)),
                     new Query('inputFields', null, [], [
-                        new FragmentReference('InputValue'),
-                    ]),
+                        new FragmentReference('InputValue', new Location(39, 24)),
+                    ], new Location(38, 17)),
                     new Query('interfaces', null, [], [
-                        new FragmentReference('TypeRef'),
-                    ]),
+                        new FragmentReference('TypeRef', new Location(42, 24)),
+                    ], new Location(41, 17)),
                     new Query('enumValues', null, [], [
-                        new Field('name'),
-                        new Field('description'),
+                        new Field('name', null, [], new Location(45, 21)),
+                        new Field('description', null, [], new Location(46, 21)),
 
-                        new Field('isDeprecated'),
-                        new Field('deprecationReason'),
-                    ]),
+                        new Field('isDeprecated', null, [], new Location(47, 21)),
+                        new Field('deprecationReason', null, [], new Location(48, 21)),
+                    ], new Location(44, 17)),
                     new Query('possibleTypes', null, [], [
-                        new FragmentReference('TypeRef'),
-                    ]),
-                ]),
+                        new FragmentReference('TypeRef', new Location(51, 24)),
+                    ], new Location(50, 17)),
+                ], new Location(22, 22)),
                 new Fragment('InputValue', '__InputValue', [
-                    new Field('name'),
-                    new Field('description'),
+                    new Field('name', null, [], new Location(56, 17)),
+                    new Field('description', null, [], new Location(57, 17)),
                     new Query('type', null, [], [
-                        new FragmentReference('TypeRef'),
-                    ]),
-                    new Field('defaultValue'),
-                ]),
+                        new FragmentReference('TypeRef', new Location(58, 27)),
+                    ], new Location(58, 17)),
+                    new Field('defaultValue', null, [], new Location(59, 17)),
+                ], new Location(55, 22)),
                 new Fragment('TypeRef', '__Type', [
-                    new Field('kind'),
-                    new Field('name'),
+                    new Field('kind', null, [], new Location(63, 17)),
+                    new Field('name', null, [], new Location(64, 17)),
                     new Query('ofType', null, [], [
-                        new Field('kind'),
-                        new Field('name'),
+                        new Field('kind', null, [], new Location(66, 21)),
+                        new Field('name', null, [], new Location(67, 21)),
                         new Query('ofType', null, [], [
-                            new Field('kind'),
-                            new Field('name'),
+                            new Field('kind', null, [], new Location(69, 25)),
+                            new Field('name', null, [], new Location(70, 25)),
                             new Query('ofType', null, [], [
-                                new Field('kind'),
-                                new Field('name'),
-                            ]),
-                        ]),
-                    ]),
-                ]),
-            ]
+                                new Field('kind', null, [], new Location(72, 29)),
+                                new Field('name', null, [], new Location(73, 29)),
+                            ], new Location(71, 25)),
+                        ], new Location(68, 21)),
+                    ], new Location(65, 17)),
+                ], new Location(62, 22)),
+            ],
+            'fragmentReferences' => [
+                new FragmentReference('FullType', new Location(7, 28)),
+                new FragmentReference('InputValue', new Location(13, 32)),
+                new FragmentReference('InputValue', new Location(30, 28)),
+                new FragmentReference('TypeRef', new Location(33, 28)),
+                new FragmentReference('InputValue', new Location(39, 24)),
+                new FragmentReference('TypeRef', new Location(42, 24)),
+                new FragmentReference('TypeRef', new Location(51, 24)),
+                new FragmentReference('TypeRef', new Location(58, 27)),
+            ],
+            'variables'          => [],
+            'variableReferences' => []
         ], $data);
     }
 
@@ -389,17 +394,18 @@ class ParserTest extends \PHPUnit_Framework_TestCase
         ');
 
         $this->assertEquals($parsedStructure, [
-            'queries'   => [
+            'queries'            => [
                 new Query('test', 'test', [],
                     [
-                        new Field('name', null),
-                        new TypedFragmentReference('UnionType', [
-                            new Field('unionName')
-                        ])
-                    ])
+                        new Field('name', null, [], new Location(4, 21)),
+                        new TypedFragmentReference('UnionType', [new Field('unionName', null, [], new Location(6, 25))], new Location(5, 28))
+                    ], new Location(3, 23))
             ],
-            'mutations' => [],
-            'fragments' => []
+            'mutations'          => [],
+            'fragments'          => [],
+            'fragmentReferences' => [],
+            'variables'          => [],
+            'variableReferences' => []
         ]);
     }
 
@@ -409,64 +415,82 @@ class ParserTest extends \PHPUnit_Framework_TestCase
             [
                 'query ($variable: Int){ query ( teas: $variable ) { alias: name } }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query('query', null,
                             [
-                                new Argument('teas', new Variable('variable', 'Int'))
+                                new Argument('teas', new VariableReference('variable', (new Variable('variable', 'Int', false, false, new Location(1, 8)))->setUsed(true), new Location(1, 39)), new Location(1, 33))
                             ],
                             [
-                                new Field('name', 'alias')
-                            ])
+                                new Field('name', 'alias', [], new Location(1, 60))
+                            ], new Location(1, 25))
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [
+                        (new Variable('variable', 'Int', false, false, new Location(1, 8)))->setUsed(true)
+                    ],
+                    'variableReferences' => [
+                        new VariableReference('variable', (new Variable('variable', 'Int', false, false, new Location(1, 8)))->setUsed(true), new Location(1, 39))
+                    ]
                 ]
             ],
             [
                 '{ query { alias: name } }',
                 [
-                    'queries'   => [
-                        new Query('query', null, [], [new Field('name', 'alias')])
+                    'queries'            => [
+                        new Query('query', null, [], [new Field('name', 'alias', [], new Location(1, 18))], new Location(1, 3))
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 'mutation { createUser ( email: "test@test.com", active: true ) { id } }',
                 [
-                    'queries'   => [],
-                    'mutations' => [
+                    'queries'            => [],
+                    'mutations'          => [
                         new Mutation(
                             'createUser',
                             null,
                             [
-                                new Argument('email', new Literal('test@test.com')),
-                                new Argument('active', new Literal(true)),
+                                new Argument('email', new Literal('test@test.com', new Location(1, 33)), new Location(1, 25)),
+                                new Argument('active', new Literal(true, new Location(1, 57)), new Location(1, 49)),
                             ],
                             [
-                                new Field('id')
-                            ]
+                                new Field('id', null, [], new Location(1, 66))
+                            ],
+                            new Location(1, 12)
                         )
                     ],
-                    'fragments' => []
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 'mutation { test : createUser (id: 4) }',
                 [
-                    'queries'   => [],
-                    'mutations' => [
+                    'queries'            => [],
+                    'mutations'          => [
                         new Mutation(
                             'createUser',
                             'test',
                             [
-                                new Argument('id', new Literal(4)),
+                                new Argument('id', new Literal(4, new Location(1, 35)), new Location(1, 31)),
                             ],
-                            []
+                            [],
+                            new Location(1, 19)
                         )
                     ],
-                    'fragments' => []
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ]
         ];
@@ -488,31 +512,55 @@ class ParserTest extends \PHPUnit_Framework_TestCase
     {
         return [
             [
+                '{ film(id: 1 filmID: 2) { title } }',
+                [
+                    'queries'            => [
+                        new Query('film', null, [
+                            new Argument('id', new Literal(1, new Location(1, 12)), new Location(1, 8)),
+                            new Argument('filmID', new Literal(2, new Location(1, 22)), new Location(1, 14))
+                        ], [
+                            new Field('title', null, [], new Location(1, 27)),
+                        ], new Location(1, 3))
+                    ],
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
+                ]
+            ],
+            [
                 '{ test (id: -5) { id } } ',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query('test', null, [
-                            new Argument('id', new Literal(-5))
+                            new Argument('id', new Literal(-5, new Location(1, 13)), new Location(1, 9))
                         ], [
-                            new Field('id'),
-                        ])
+                            new Field('id', null, [], new Location(1, 19)),
+                        ], new Location(1, 3))
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 "{ test (id: -5) \r\n { id } } ",
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query('test', null, [
-                            new Argument('id', new Literal(-5))
+                            new Argument('id', new Literal(-5, new Location(1, 13)), new Location(1, 9))
                         ], [
-                            new Field('id'),
-                        ])
+                            new Field('id', null, [], new Location(2, 4)),
+                        ], new Location(1, 3))
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
@@ -523,143 +571,178 @@ class ParserTest extends \PHPUnit_Framework_TestCase
                   }
                 }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query('hero', null, [
-                            new Argument('episode', new Literal('EMPIRE'))
+                            new Argument('episode', new Literal('EMPIRE', new Location(2, 33)), new Location(2, 24))
                         ], [
-                            new Field('__typename'),
-                            new Field('name'),
-                        ])
+                            new Field('__typename', null, [], new Location(3, 21)),
+                            new Field('name', null, [], new Location(4, 21)),
+                        ], new Location(2, 19))
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{ test { __typename, id } }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query('test', null, [], [
-                            new Field('__typename'),
-                            new Field('id'),
-                        ])
+                            new Field('__typename', null, [], new Location(1, 10)),
+                            new Field('id', null, [], new Location(1, 22)),
+                        ], new Location(1, 3))
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{}',
                 [
-                    'queries'   => [],
-                    'mutations' => [],
-                    'fragments' => []
+                    'queries'            => [],
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 'query test {}',
                 [
-                    'queries'   => [],
-                    'mutations' => [],
-                    'fragments' => []
+                    'queries'            => [],
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 'query {}',
                 [
-                    'queries'   => [],
-                    'mutations' => [],
-                    'fragments' => []
+                    'queries'            => [],
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 'mutation setName { setUserName }',
                 [
-                    'queries'   => [],
-                    'mutations' => [new Mutation('setUserName')],
-                    'fragments' => []
+                    'queries'            => [],
+                    'mutations'          => [new Mutation('setUserName', null, [], [], new Location(1, 20))],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{ test { ...userDataFragment } } fragment userDataFragment on User { id, name, email }',
                 [
-                    'queries'   => [
-                        new Query('test', null, [], [new FragmentReference('userDataFragment')])
+                    'queries'            => [
+                        new Query('test', null, [], [new FragmentReference('userDataFragment', new Location(1, 13))], new Location(1, 3))
                     ],
-                    'mutations' => [],
-                    'fragments' => [
+                    'mutations'          => [],
+                    'fragments'          => [
                         new Fragment('userDataFragment', 'User', [
-                            new Field('id'),
-                            new Field('name'),
-                            new Field('email')
-                        ])
-                    ]
+                            new Field('id', null, [], new Location(1, 70)),
+                            new Field('name', null, [], new Location(1, 74)),
+                            new Field('email', null, [], new Location(1, 80))
+                        ], new Location(1, 43))
+                    ],
+                    'fragmentReferences' => [
+                        new FragmentReference('userDataFragment', new Location(1, 13))
+                    ],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{ user (id: 10, name: "max", float: 123.123 ) { id, name } }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query(
                             'user',
                             null,
                             [
-                                new Argument('id', new Literal('10')),
-                                new Argument('name', new Literal('max')),
-                                new Argument('float', new Literal('123.123'))
+                                new Argument('id', new Literal('10', new Location(1, 13)), new Location(1, 9)),
+                                new Argument('name', new Literal('max', new Location(1, 24)), new Location(1, 17)),
+                                new Argument('float', new Literal('123.123', new Location(1, 37)), new Location(1, 30))
                             ],
                             [
-                                new Field('id'),
-                                new Field('name')
-                            ]
+                                new Field('id', null, [], new Location(1, 49)),
+                                new Field('name', null, [], new Location(1, 53))
+                            ],
+                            new Location(1, 3)
                         )
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{ allUsers : users ( id: [ 1, 2, 3] ) { id } }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query(
                             'users',
                             'allUsers',
                             [
-                                new Argument('id', new InputList([1, 2, 3]))
+                                new Argument('id', new InputList([1, 2, 3], new Location(1, 26)), new Location(1, 22))
                             ],
                             [
-                                new Field('id')
-                            ]
+                                new Field('id', null, [], new Location(1, 41))
+                            ],
+                            new Location(1, 14)
                         )
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{ allUsers : users ( id: [ 1, "2", true, null] ) { id } }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query(
                             'users',
                             'allUsers',
                             [
-                                new Argument('id', new InputList([1, "2", true, null]))
+                                new Argument('id', new InputList([1, "2", true, null], new Location(1, 26)), new Location(1, 22))
                             ],
                             [
-                                new Field('id')
-                            ]
+                                new Field('id', null, [], new Location(1, 52))
+                            ],
+                            new Location(1, 14)
                         )
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ],
             [
                 '{ allUsers : users ( object: { "a": 123, "d": "asd",  "b" : [ 1, 2, 4 ], "c": { "a" : 123, "b":  "asd" } } ) { id } }',
                 [
-                    'queries'   => [
+                    'queries'            => [
                         new Query(
                             'users',
                             'allUsers',
@@ -668,19 +751,23 @@ class ParserTest extends \PHPUnit_Framework_TestCase
                                     'a' => 123,
                                     'd' => 'asd',
                                     'b' => [1, 2, 4],
-                                    'c' => [
+                                    'c' => new InputObject([
                                         'a' => 123,
                                         'b' => 'asd'
-                                    ]
-                                ]))
+                                    ], new Location(1, 79))
+                                ], new Location(1, 30)), new Location(1, 22))
                             ],
                             [
-                                new Field('id')
-                            ]
+                                new Field('id', null, [], new Location(1, 112))
+                            ],
+                            new Location(1, 14)
                         )
                     ],
-                    'mutations' => [],
-                    'fragments' => []
+                    'mutations'          => [],
+                    'fragments'          => [],
+                    'fragmentReferences' => [],
+                    'variables'          => [],
+                    'variableReferences' => []
                 ]
             ]
         ];
@@ -691,8 +778,8 @@ class ParserTest extends \PHPUnit_Framework_TestCase
         $parser = new Parser();
 
         $data = $parser->parse('
-            query StarWarsAppHomeRoute($names_0:[String]!) {
-              factions(names:$names_0) {
+            query StarWarsAppHomeRoute($names_0:[String!]!, $query: String) {
+              factions(names:$names_0, test: $query) {
                 id,
                 ...F2
               }

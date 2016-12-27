@@ -45,9 +45,16 @@ class StarWarsTest extends \PHPUnit_Framework_TestCase
 
         $data = $processor->getResponseData();
         $this->assertEquals($data, [
+            'data'   => ['human' => null],
             'errors' => [
                 [
-                    'message' => 'Invalid variable "someId" type, allowed type is "ID"'
+                    'message'   => 'Invalid variable "someId" type, allowed type is "ID"',
+                    'locations' => [
+                        [
+                            'line'   => 1,
+                            'column' => 7
+                        ]
+                    ]
                 ]
             ]
         ]);

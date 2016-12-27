@@ -32,7 +32,20 @@ abstract class AbstractListType extends AbstractObjectType implements CompositeT
 
     public function isValidValue($value)
     {
-        return is_null($value) || is_array($value) || (is_object($value) && in_array('IteratorAggregate', class_implements($value)));
+        $isValid  = is_null($value) || is_array($value) || ($value instanceof \Traversable);
+        $itemType = $this->config->get('itemType');
+
+        if ($isValid && $value && $itemType->isInputType()) {
+            foreach ($value as $item) {
+                $isValid = $itemType->isValidValue($item);
+
+                if (!$isValid) {
+                    break;
+                }
+            }
+        }
+
+        return $isValid;
     }
 
     /**
@@ -62,5 +75,13 @@ abstract class AbstractListType extends AbstractObjectType implements CompositeT
         return $this->getNamedType();
     }
 
+    public function parseValue($value)
+    {
+        foreach ($value as $keyValue => $valueItem) {
+            $value[$keyValue] = $this->getItemType()->parseValue($valueItem);
+        }
+
+        return $value;
+    }
 
 }

@@ -8,7 +8,10 @@
 namespace Youshido\GraphQL\Execution;
 
 
+use Youshido\GraphQL\Parser\Ast\ArgumentValue\Variable;
+use Youshido\GraphQL\Parser\Ast\ArgumentValue\VariableReference;
 use Youshido\GraphQL\Parser\Ast\Fragment;
+use Youshido\GraphQL\Parser\Ast\FragmentReference;
 use Youshido\GraphQL\Parser\Ast\Mutation;
 use Youshido\GraphQL\Parser\Ast\Query;
 
@@ -27,6 +30,15 @@ class Request
     /** @var array */
     private $variables = [];
 
+    /** @var  array */
+    private $variableReferences = [];
+
+    /** @var  array */
+    private $queryVariables = [];
+
+    /** @var array */
+    private $fragmentReferences = [];
+
     public function __construct($data = [], $variables = [])
     {
         if (array_key_exists('queries', $data)) {
@@ -40,6 +52,19 @@ class Request
         if (array_key_exists('fragments', $data)) {
             $this->addFragments($data['fragments']);
         }
+
+        if (array_key_exists('fragmentReferences', $data)) {
+            $this->addFragmentReferences($data['fragmentReferences']);
+        }
+
+        if (array_key_exists('variables', $data)) {
+            $this->addQueryVariables($data['variables']);
+        }
+
+        if (array_key_exists('variableReferences', $data)) {
+            $this->addVariableReferences($data['variableReferences']);
+        }
+
         $this->setVariables($variables);
     }
 
@@ -57,14 +82,38 @@ class Request
         }
     }
 
-    public function addFragments($fragments)
+    public function addQueryVariables($queryVariables)
     {
-        foreach ($fragments as $fragment) {
-            $this->fragments[] = $fragment;
+        foreach ($queryVariables as $queryVariable) {
+            $this->queryVariables[] = $queryVariable;
         }
     }
 
-    public function getOperationsInOrder()
+    public function addVariableReferences($variableReferences)
+    {
+        foreach ($variableReferences as $variableReference) {
+            $this->variableReferences[] = $variableReference;
+        }
+    }
+
+    public function addFragmentReferences($fragmentReferences)
+    {
+        foreach ($fragmentReferences as $fragmentReference) {
+            $this->fragmentReferences[] = $fragmentReference;
+        }
+    }
+
+    public function addFragments($fragments)
+    {
+        foreach ($fragments as $fragment) {
+            $this->addFragment($fragment);
+        }
+    }
+
+    /**
+     * @return Query[]
+     */
+    public function getAllOperations()
     {
         return array_merge($this->mutations, $this->queries);
     }
@@ -148,10 +197,15 @@ class Request
 
     /**
      * @param array $variables
+     *
      * @return $this
      */
     public function setVariables($variables)
     {
+        if (!is_array($variables)) {
+            $variables = json_decode($variables, true);
+        }
+
         $this->variables = $variables;
 
         return $this;
@@ -167,4 +221,43 @@ class Request
         return array_key_exists($name, $this->variables);
     }
 
+    /**
+     * @return array|Variable[]
+     */
+    public function getQueryVariables()
+    {
+        return $this->queryVariables;
+    }
+
+    /**
+     * @param array $queryVariables
+     */
+    public function setQueryVariables($queryVariables)
+    {
+        $this->queryVariables = $queryVariables;
+    }
+
+    /**
+     * @return array|FragmentReference[]
+     */
+    public function getFragmentReferences()
+    {
+        return $this->fragmentReferences;
+    }
+
+    /**
+     * @param array $fragmentReferences
+     */
+    public function setFragmentReferences($fragmentReferences)
+    {
+        $this->fragmentReferences = $fragmentReferences;
+    }
+
+    /**
+     * @return array|VariableReference[]
+     */
+    public function getVariableReferences()
+    {
+        return $this->variableReferences;
+    }
 }

@@ -22,11 +22,6 @@ class IdType extends AbstractScalarType
         return (string)$value;
     }
 
-    public function isValidValue($value)
-    {
-        return !empty($value);
-    }
-
     public function getDescription()
     {
         return 'The `ID` scalar type represents a unique identifier, often used to ' .

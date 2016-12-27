@@ -9,10 +9,12 @@
 namespace Youshido\GraphQL\Validator\ConfigValidator;
 
 
+use Youshido\GraphQL\Config\AbstractConfig;
+use Youshido\GraphQL\Exception\ConfigurationException;
+use Youshido\GraphQL\Exception\ValidationException;
 use Youshido\GraphQL\Validator\ConfigValidator\Rules\TypeValidationRule;
 use Youshido\GraphQL\Validator\ConfigValidator\Rules\ValidationRuleInterface;
 use Youshido\GraphQL\Validator\ErrorContainer\ErrorContainerTrait;
-use Youshido\GraphQL\Validator\Exception\ValidationException;
 
 class ConfigValidator implements ConfigValidatorInterface
 {
@@ -47,6 +49,33 @@ class ConfigValidator implements ConfigValidatorInterface
 
         return self::$instance;
     }
+
+    public function assertValidConfig(AbstractConfig $config)
+    {
+        if (!$this->isValidConfig($config)) {
+            throw new ConfigurationException('Config is not valid for ' . ($config->getContextObject() ? get_class($config->getContextObject()) : null) . "\n" . implode("\n", $this->getErrorsArray(false)));
+        }
+    }
+
+    public function isValidConfig(AbstractConfig $config)
+    {
+        return $this->validate($config->getData(), $this->getConfigFinalRules($config), $config->isExtraFieldsAllowed());
+    }
+
+    protected function getConfigFinalRules(AbstractConfig $config)
+    {
+        $rules = $config->getRules();
+        if ($config->isFinalClass()) {
+            foreach ($rules as $name => $info) {
+                if (!empty($info['final'])) {
+                    $rules[$name]['required'] = true;
+                }
+            }
+        }
+
+        return $rules;
+    }
+
 
     public function validate($data, $rules = [], $extraFieldsAllowed = null)
     {

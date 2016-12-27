@@ -8,9 +8,12 @@
 
 namespace Youshido\Tests\Library\Config;
 
+use Youshido\GraphQL\Type\Enum\EnumType;
 use Youshido\GraphQL\Type\Object\ObjectType;
+use Youshido\GraphQL\Type\Scalar\IdType;
 use Youshido\GraphQL\Type\Scalar\IntType;
 use Youshido\GraphQL\Type\TypeService;
+use Youshido\GraphQL\Validator\ConfigValidator\ConfigValidator;
 use Youshido\Tests\DataProvider\TestConfig;
 use Youshido\Tests\DataProvider\TestConfigExtraFields;
 use Youshido\Tests\DataProvider\TestConfigInvalidRule;
@@ -19,7 +22,7 @@ class ConfigTest extends \PHPUnit_Framework_TestCase
 {
 
     /**
-     * @expectedException Youshido\GraphQL\Validator\Exception\ConfigurationException
+     * @expectedException Youshido\GraphQL\Exception\ConfigurationException
      */
     public function testEmptyParams()
     {
@@ -27,11 +30,11 @@ class ConfigTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * @expectedException Youshido\GraphQL\Validator\Exception\ConfigurationException
+     * @expectedException Youshido\GraphQL\Exception\ConfigurationException
      */
     public function testInvalidParams()
     {
-        new TestConfig(['id' => 1]);
+        ConfigValidator::getInstance()->assertValidConfig(new TestConfig(['id' => 1]));
     }
 
     /**
@@ -93,19 +96,45 @@ class ConfigTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-     * @expectedException Youshido\GraphQL\Validator\Exception\ConfigurationException
+     * @expectedException Youshido\GraphQL\Exception\ConfigurationException
      */
     public function testFinalRule()
     {
-        new TestConfig(['name' => 'Test' . 'final'], null, true);
+        ConfigValidator::getInstance()->assertValidConfig(new TestConfig(['name' => 'Test' . 'final'], null, true));
     }
 
     /**
-     * @expectedException Youshido\GraphQL\Validator\Exception\ConfigurationException
+     * @expectedException Youshido\GraphQL\Exception\ConfigurationException
      */
     public function testInvalidRule()
     {
-        new TestConfigInvalidRule(['name' => 'Test', 'invalidRuleField' => 'test'], null, null);
+        ConfigValidator::getInstance()->assertValidConfig(
+            new TestConfigInvalidRule(['name' => 'Test', 'invalidRuleField' => 'test'], null, null)
+        );
+    }
+
+    /**
+     * @expectedException Youshido\GraphQL\Exception\ConfigurationException
+     */
+    public function testEnumConfig()
+    {
+        $enumType = new EnumType([
+            'name'   => 'Status',
+            'values' => [
+                [
+                    'name'   => 'ACTIVE',
+                    'values' => 1
+                ]
+            ]
+        ]);
+        $object   = new ObjectType([
+            'name' => 'Project',
+            'fields' => [
+                'id' => new IdType(),
+                'status' => $enumType
+            ]
+        ]);
+        ConfigValidator::getInstance()->assertValidConfig($object->getConfig());
     }
 
 }

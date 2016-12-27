@@ -18,7 +18,7 @@ class NonNullTypeTest extends \PHPUnit_Framework_TestCase
 {
 
     /**
-     * @expectedException Youshido\GraphQL\Validator\Exception\ConfigurationException
+     * @expectedException Youshido\GraphQL\Exception\ConfigurationException
      */
     public function testInvalidParams()
     {
@@ -43,7 +43,8 @@ class NonNullTypeTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(TypeService::isAbstractType($nonNullType), false);
         $this->assertFalse($nonNullType->isValidValue(null));
         $this->assertTrue($nonNullType->isValidValue($stringType));
-        $this->assertEquals($nonNullType->parseValue($testArray), $testArray);
+        $this->assertFalse($nonNullType->isValidValue(new \stdClass()));
+        $this->assertEquals($nonNullType->parseValue($testArray), '');
         $this->assertEquals($nonNullType->resolve($testArray), $testArray);
     }
 
